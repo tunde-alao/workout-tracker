@@ -1,114 +1,240 @@
-import Image from "next/image";
-import { Geist, Geist_Mono } from "next/font/google";
+"use client";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Exercise, EXERCISE_LIST, Workout } from "@/types/workout";
+import { formatDuration, getWorkouts, saveWorkout } from "@/utils/workout";
 
 export default function Home() {
-  return (
-    <div
-      className={`${geistSans.variable} ${geistMono.variable} grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]`}
-    >
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/pages/index.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [currentWorkout, setCurrentWorkout] = useState<Workout | null>(null);
+  const [showExerciseList, setShowExerciseList] = useState(false);
+  const [timer, setTimer] = useState("0:00");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    setWorkouts(getWorkouts());
+  }, []);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (currentWorkout) {
+      interval = setInterval(() => {
+        setTimer(formatDuration(currentWorkout.startTime));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [currentWorkout]);
+
+  const startWorkout = () => {
+    const newWorkout: Workout = {
+      id: Date.now().toString(),
+      startTime: new Date().toISOString(),
+      endTime: "",
+      duration: "",
+      exercises: [],
+    };
+    setCurrentWorkout(newWorkout);
+  };
+
+  const addExercise = (exerciseName: string) => {
+    if (!currentWorkout) return;
+
+    const newExercise: Exercise = {
+      name: exerciseName,
+      sets: Array(3).fill({ reps: 0, weight: 0 }),
+    };
+
+    setCurrentWorkout({
+      ...currentWorkout,
+      exercises: [...currentWorkout.exercises, newExercise],
+    });
+    setShowExerciseList(false);
+  };
+
+  const updateSet = (
+    exerciseIndex: number,
+    setIndex: number,
+    field: "reps" | "weight",
+    value: number
+  ) => {
+    if (!currentWorkout) return;
+
+    const updatedExercises = [...currentWorkout.exercises];
+    const sets = [...updatedExercises[exerciseIndex].sets];
+    sets[setIndex] = { ...sets[setIndex], [field]: value };
+    updatedExercises[exerciseIndex] = {
+      ...updatedExercises[exerciseIndex],
+      sets,
+    };
+
+    setCurrentWorkout({
+      ...currentWorkout,
+      exercises: updatedExercises,
+    });
+  };
+
+  const addSet = (exerciseIndex: number) => {
+    if (!currentWorkout) return;
+
+    const updatedExercises = [...currentWorkout.exercises];
+    updatedExercises[exerciseIndex].sets.push({ reps: 0, weight: 0 });
+
+    setCurrentWorkout({
+      ...currentWorkout,
+      exercises: updatedExercises,
+    });
+  };
+
+  const completeWorkout = () => {
+    if (!currentWorkout) return;
+
+    const completedWorkout = {
+      ...currentWorkout,
+      endTime: new Date().toISOString(),
+      duration: timer,
+    };
+
+    saveWorkout(completedWorkout);
+    setWorkouts(getWorkouts());
+    setCurrentWorkout(null);
+  };
+
+  return (
+    <main className="container mx-auto p-4 max-w-3xl">
+      <h1 className="text-3xl font-bold mb-6">Workout Tracker</h1>
+
+      {!currentWorkout ? (
+        <div className="space-y-6">
+          <Button onClick={startWorkout}>Start Workout</Button>
+
+          <div className="space-y-4">
+            <h2 className="text-2xl font-semibold">Previous Workouts</h2>
+            {workouts.map((workout) => (
+              <Card key={workout.id}>
+                <CardHeader>
+                  <CardTitle>
+                    Workout - {new Date(workout.startTime).toLocaleDateString()}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p>Duration: {workout.duration}</p>
+                  <div className="mt-2">
+                    {workout.exercises.map((exercise, i) => (
+                      <div key={i} className="mt-2">
+                        <p className="font-medium">{exercise.name}</p>
+                        <div className="text-sm text-gray-600">
+                          {exercise.sets.map((set, j) => (
+                            <span key={j} className="mr-4">
+                              Set {j + 1}: {set.reps} reps @ {set.weight}kg
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-semibold">Current Workout</h2>
+            <div className="text-xl font-mono">{timer}</div>
+          </div>
+
+          <Button onClick={() => setShowExerciseList(true)}>
+            Add Exercise
+          </Button>
+
+          <ScrollArea className="h-[60vh]">
+            {currentWorkout.exercises.map((exercise, exerciseIndex) => (
+              <Card key={exerciseIndex} className="mb-4">
+                <CardHeader>
+                  <CardTitle>{exercise.name}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {exercise.sets.map((set, setIndex) => (
+                      <div key={setIndex} className="flex gap-4 items-center">
+                        <span className="w-16">Set {setIndex + 1}</span>
+                        <Input
+                          type="number"
+                          placeholder="Reps"
+                          value={set.reps || ""}
+                          onChange={(e) =>
+                            updateSet(
+                              exerciseIndex,
+                              setIndex,
+                              "reps",
+                              Number(e.target.value)
+                            )
+                          }
+                          className="w-24"
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Weight (kg)"
+                          value={set.weight || ""}
+                          onChange={(e) =>
+                            updateSet(
+                              exerciseIndex,
+                              setIndex,
+                              "weight",
+                              Number(e.target.value)
+                            )
+                          }
+                          className="w-24"
+                        />
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addSet(exerciseIndex)}
+                    >
+                      Add Set
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </ScrollArea>
+
+          <Button onClick={completeWorkout} className="w-full">
+            Complete Workout
+          </Button>
+        </div>
+      )}
+
+      <Dialog open={showExerciseList} onOpenChange={setShowExerciseList}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Exercise</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2">
+            {EXERCISE_LIST.map((exercise) => (
+              <Button
+                key={exercise}
+                variant="outline"
+                onClick={() => addExercise(exercise)}
+              >
+                {exercise}
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </main>
   );
 }
