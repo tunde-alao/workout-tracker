@@ -13,6 +13,13 @@ export const getWorkouts = (): Workout[] => {
   return workouts ? JSON.parse(workouts) : [];
 };
 
+export const deleteWorkout = (workoutId: string) => {
+  const workouts = getWorkouts();
+  const filteredWorkouts = workouts.filter((w) => w.id !== workoutId);
+  sessionStorage.setItem(WORKOUTS_KEY, JSON.stringify(filteredWorkouts));
+  return filteredWorkouts;
+};
+
 export const formatDuration = (startTime: string): string => {
   const start = new Date(startTime).getTime();
   const now = new Date().getTime();
